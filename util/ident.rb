@@ -7,7 +7,7 @@ include Intrigue::Ident
 include Intrigue::Ident::Utils
 
 def allowed_protocols
-  ["ftp", "smtp", "snmp"]
+  ["ftp", "smtp", "snmp", "ssh"]
 end
 
 def check_single_ip(opts)
@@ -27,6 +27,8 @@ def check_single_ip(opts)
     results = generate_snmp_request_and_check(ip, port || 161)
   elsif  opts[:proto] == "smtp"
     results = generate_smtp_request_and_check(ip, port || 25)
+  elsif  opts[:proto] == "ssh"
+    results = generate_ssh_request_and_check(ip, port || 22)
   else 
     puts "Error! Unknown protocol!"
     puts "We know about the following: #{allowed_protocols.join(", ")}"
@@ -268,10 +270,11 @@ def write_standard_csv(output_q)
 end
 
 def list_checks
-  Intrigue::Ident::Http::CheckFactory.checks.map{|x| x.new.generate_checks("[uri]") }.flatten
-  #Intrigue::Ident::Ftp::CheckFactory.checks.map{|x| x.new.generate_checks.flatten
-  #Intrigue::Ident::Smtp::CheckFactory.checks.map{|x| x.new.generate_checks.flatten
-  #Intrigue::Ident::Snmp::CheckFactory.checks.map{|x| x.new.generate_checks.flatten
+  Intrigue::Ident::Http::CheckFactory.checks.map{|x| x.new.generate_checks("[uri]") }.concat(
+  Intrigue::Ident::Ftp::CheckFactory.checks.map{|x| x.new.generate_checks}).concat(
+  Intrigue::Ident::Smtp::CheckFactory.checks.map{|x| x.new.generate_checks}).concat(
+  Intrigue::Ident::Snmp::CheckFactory.checks.map{|x| x.new.generate_checks}).concat(
+  Intrigue::Ident::Ssh::CheckFactory.checks.map{|x| x.new.generate_checks}).flatten
 end
 
 def main
