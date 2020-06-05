@@ -1,13 +1,13 @@
 module Intrigue
   module Ident
-    module Ftp
+    module Telnet
 
       include Intrigue::Ident::SimpleSocket
 
-      def generate_ftp_request_and_check(ip, port=21, debug=false)
+      def generate_telnet_request_and_check(ip, port=23, debug=false)
 
         # do the request (store as string and funky format bc of usage in core.. and  json conversions)
-        banner_string = grab_banner_ftp(ip,port)
+        banner_string = grab_banner_telnet(ip,port)
         details = {
           "details" => {
             "banner" => banner_string
@@ -17,20 +17,19 @@ module Intrigue
         results = []
   
         # generate the checks 
-        checks = Intrigue::Ident::Ftp::CheckFactory.checks.map{ |x| x.new.generate_checks }.compact.flatten
+        checks = Intrigue::Ident::Telnet::CheckFactory.checks.map{ |x| x.new.generate_checks }.compact.flatten
   
         # and run them against our result
         checks.each do |check|
-          results << match_smtp_response_hash(check,details)
+          results << match_telnet_response_hash(check,details)
         end
   
       { "fingerprints" => results.uniq.compact, "banner" => banner_string, "content" => [] }
       end
 
+      private
 
-      private 
-
-      def grab_banner_ftp(ip, port, timeout=30)
+      def grab_banner_telnet(ip, port, timeout=30)
           
         if socket = connect_tcp(ip, port, timeout)
           #socket.writepartial("HELO friend.local\r\n\r\n")
@@ -46,6 +45,7 @@ module Intrigue
         
       out
       end
+
 
     end
   end

@@ -23,8 +23,10 @@ module Intrigue
         checks.each do |check|
           results << match_smtp_response_hash(check,details)
         end
+
+        recog_results = recog_match_smtp_banner(banner_string)
   
-      results.map{|x| (x || {}).merge({"banner" => banner_string})}.uniq.compact
+      { "fingerprints" => (results + recog_results).uniq.compact, "banner" => banner_string, "content" => [] }
       end
 
       private

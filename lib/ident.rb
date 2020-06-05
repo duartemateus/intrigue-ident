@@ -8,6 +8,13 @@ require 'zlib'
 require_relative 'utils'
 require_relative 'version'
 
+# integrate recog
+require_relative 'recog_wrapper'
+
+###
+### Start protocol requires 
+###
+
 ##################################
 # Load in http matchers and checks
 ###################################
@@ -75,7 +82,7 @@ Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
 
 
 ##################################
-# Load in snmp matchers and checks
+# Load in ssh matchers and checks
 ##################################
 require_relative 'ssh/matchers'
 include Intrigue::Ident::Ssh::Matchers
@@ -83,10 +90,26 @@ include Intrigue::Ident::Ssh::Matchers
 require_relative 'ssh/check_factory'
 require_relative '../checks/ssh/base'
 
-# snmp fingerprints
+# ssh fingerprints
 check_folder = File.expand_path('../checks/ssh', File.dirname(__FILE__)) # get absolute directory
 Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
 
+##################################
+# Load in telnet matchers and checks
+##################################
+require_relative 'telnet/matchers'
+include Intrigue::Ident::Telnet::Matchers
+
+require_relative 'telnet/check_factory'
+require_relative '../checks/telnet/base'
+
+# telnet fingerprints
+check_folder = File.expand_path('../checks/telnet', File.dirname(__FILE__)) # get absolute directory
+Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
+
+###
+### End protocol requires 
+###
 
 # Load vulndb client 
 require_relative "vulndb_client"
@@ -157,6 +180,7 @@ module Intrigue
         end
 
         to_return = {
+          "method" => "ident",
           "type" => check[:type],
           "vendor" => check[:vendor],
           "product" => check[:product],
@@ -182,26 +206,35 @@ module Intrigue
         ##
         if result
         
-          if check[:dynamic_hide]
-            hide = check[:dynamic_hide].call(data) 
-          else 
-            hide = nil
-          end
-
           ##
-          ## Support for Dynamic Issue (must be dynamic, these checks always run)
+          ## Support for Dynamic 
           ##
           if check[:dynamic_issue]
             issue = check[:dynamic_issue].call(data)
+          elsif check[:issue]
+            issue = check[:issue]
           else
             issue = nil
           end
+          
+          ##
+          ## Support for Dynamic Hide
+          ##
+          if check[:dynamic_hide]
+            hide = check[:dynamic_hide].call(data)
+          elsif check[:hide]
+            hide = check[:hide]
+          else
+            hide = false
+          end
 
           ##
-          ## Support for Dynamic Task (must be dynamic, these checks always run)
+          ## Support for Dynamic Task
           ##
           if check[:dynamic_task]
             task = check[:dynamic_task].call(data)
+          elsif check[:task]
+            task = check[:task]
           else
             task = nil
           end
@@ -223,6 +256,8 @@ module Intrigue
 
 end
 end
+
+
 
 # always include 
 include Intrigue::Ident
