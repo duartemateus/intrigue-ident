@@ -27,10 +27,17 @@ module Intrigue
           results << match_smtp_response_hash(check,details)
         end
   
+        recog_results = [] 
+
         # Run recog across the banner
-        recog_results = recog_match_smtp_banner(banner_string)
+        short_banner_string = banner_string.split(" ")[1..-1].join(" ").gsub("\r\n","") # skip 220 and hostname
+        recog_results << recog_match_smtp_banner(short_banner_string)
   
-      { "fingerprint" => (results + recog_results).uniq.compact, "banner" => banner_string, "content" => [] }
+        # Run recog across the banner (also removing the hostname)
+        short_banner_string = banner_string.split(" ")[2..-1].join(" ").gsub("\r\n","") # skip 220 and hostname
+        recog_results << recog_match_smtp_banner(short_banner_string)
+
+      { "fingerprint" => (results + recog_results.flatten).uniq.compact, "banner" => banner_string, "content" => [] }
       end
 
       private
@@ -40,7 +47,7 @@ module Intrigue
         if socket = connect_tcp(ip, port, timeout)
           #socket.writepartial("HELO friend.local\r\n\r\n")
           begin 
-            out = socket.readpartial(2048, timeout: timeout)
+            out = socket.readpartial(24576, timeout: timeout)
           rescue Socketry::TimeoutError
             puts "Error while reading! Timeout."
             out = nil
@@ -49,7 +56,7 @@ module Intrigue
           out = nil
         end
         
-      out
+      "#{out}".encode('UTF-8', invalid: :replace, undef: :replace, replace: '?')
       end
 
     end

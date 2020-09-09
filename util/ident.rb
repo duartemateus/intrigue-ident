@@ -6,7 +6,7 @@ require 'thread'
 include Intrigue::Ident
 include Intrigue::Ident::Utils
 
-def check_file_urls(opts)
+def check_file_uris(opts)
 
   filepath = opts[:file]
   debug = opts[:debug]
@@ -59,8 +59,9 @@ def check_file_urls(opts)
 
         end # while
       rescue StandardError => e
-        puts "EXCEPTION! #{e}"
+        puts "Caught Exception! #{e}" if debug
       rescue ThreadError
+        puts "Caught Exception! #{e}" if debug
       end # begin
     end # thread
   end; "ok" # workers 
@@ -79,45 +80,17 @@ def check_single_uri(opts)
 
   if uri = opts[:uri]
 
-    if uri =~ /^http[s]?:\/\/.*$/      
+    if uri =~ /^http[s]?:\/\/.*$/   
+
       check_result = generate_http_requests_and_check(uri, opts)
       if debug 
-        puts "Ran #{check_result["initial_checks"].first["count"]} checks against base URL"
+        puts "Ran #{check_result["initial_checks"].first["count"]} initial checks against base URL"
         if !check_result["followon_checks"].empty?
           puts "Also checked the following urls due to initial fingerprint:"
           check_result["followon_checks"].each{|x| puts " - #{x["url"]}\n" }
         end
       end 
   
-      #
-      # Handle debug output for https  
-      #
-      if debug
-        i= 0
-        if check_result["requests"]
-
-          # delete any existing file
-          File.delete "debug.txt" if File.exist? "debug.txt" 
-
-          check_result["requests"].sort_by{|r| "#{r[:request_type].to_s.upcase}"}.each do |x|
-
-            safex = encode_hash x 
-
-            # increment the request number
-            i+=1
-
-            # print it
-            puts "#{i}) #{x[:request_type].to_s.upcase} #{x[:request_method].to_s.upcase} #{x[:start_url]} -> #{x[:final_url]} (#{x[:request_attempts_used] || 1}/#{x[:request_attempts_limit]||1})"
-
-            # write the contents to a file
-            File.open("requests.txt","a") do |f|
-              f.puts "Request #{i}\n #{JSON.pretty_generate (safex)}\n\n\n\n"
-            end
-
-          end
-        end
-      end
-
     else # not http 
 
       parsed_uri = URI(uri)
@@ -128,8 +101,14 @@ def check_single_uri(opts)
 
       puts "Checking ... PROTO: #{proto} | HOST: #{ip} | PORT: #{port || "default"}" if debug
     
-      if proto == "ftp"
+      if proto == "dns"
+        check_result = generate_dns_request_and_check(ip, port || 53)
+      elsif proto == "ftp"
         check_result = generate_ftp_request_and_check(ip, port || 21)
+      elsif proto == "mysql"
+        check_result = generate_mysql_request_and_check(ip, port || 3306)
+      elsif proto == "pop3"
+        check_result = generate_pop3_request_and_check(ip, port || 110)
       elsif proto == "snmp"
         check_result = generate_snmp_request_and_check(ip, port || 161)
       elsif  proto == "smtp"
@@ -149,32 +128,32 @@ def check_single_uri(opts)
       exit -1
     end
 
-    if check_result["fingerprint"]
+    #if debug 
+    #  puts "Check Result: #{check_result}"
+    #end
+
+    if check_result["fingerprint"] && !json
       puts "Fingerprint: "
       uniq_matches = []
       check_result["fingerprint"].each do |x|
-        
-        # Make sure not to include dupes, unless we're debugging 
-        #next if uniq_matches.include? "#{x["vendor"]} #{x["product"]} #{x["version"]} #{x["update"]}" #unless debug
-
-        uniq_matches << "#{x["vendor"]} #{x["product"]} #{x["version"]} #{x["update"]}"
-        
-        # otherwise, print it out
-        puts " - #{x["vendor"]} #{x["product"]} #{x["version"]} #{x["update"]} - #{x["match_details"]} (CPE: #{x["cpe"]}) (Tags: #{x["tags"]}) (Hide: #{x["hide"]})"
+              
+        # Print it out
+        puts " - #{x["vendor"]} #{x["product"]} #{x["version"]} #{x["update"]} - #{x["match_details"]} (CPE: #{x["cpe"]}) (Tags: #{x["tags"]}) (Hide: #{x["hide"]}) (Issues: #{x["issues"]}) (Tasks: #{x["tasks"]})"
         if query_vulns
-          vulns = Intrigue::Vulndb::Client.query(nil, x["cpe"]) || []
-          vulns.sort_by{|x| x["cvss_v3_score"] || 0 }.reverse.first(5).each do |v|
-            puts "   - Vuln: #{v["cve"]} (CVSSv3: #{v["cvss_v3_score"]})"
+          vulns = Intrigue::Vulndb::Client.query(ENV["INTRIGUEIO_KEY"], x["cpe"]) || []
+          vulns.sort_by{|x| x["cvss_v3_score"] || x["cvss_v2_score"] || 1 }.reverse.first(5).each do |v|
+            puts "   - Vuln: #{v["cve"]} (CVSS: #{v["cvss_v3_score"] || v["cvss_v2_score"]}) https://nvd.nist.gov/vuln/detail/#{v["cve"]}"
           end
         end
       end
-    else 
-      puts "No fingerprint possible!"
+      
+    elsif !json
+      puts "No fingerprintable technologies discovered!"
     end
 
-    if opts[:content] 
-      puts "Content Checks:"
+    if opts[:content]
       if check_result["content"]
+        puts "Content Checks:"
         check_result["content"].each do|x|
           puts " - #{x["name"]}: #{x["result"]}"
         end
@@ -190,6 +169,7 @@ def write_simple_csv(output_q)
   headings = [] 
   headings << "URL"
   headings << "Fingerprint"
+  headings << "Match Details"
   File.open("output.csv","w") { |f| f.puts headings.join(", ") }
 
   while output_q.size > 0 do
@@ -200,7 +180,10 @@ def write_simple_csv(output_q)
     # get our url, fingerprint and tags
     out = ""
     o["fingerprint"].uniq.map do |f|
-      out << "#{o["url"]}, #{f["vendor"]} #{f["product"]} #{f["version"]} #{f["update"]}\n"
+      out << "#{o["url"]}, "
+      out << "#{f["vendor"]} #{f["product"]} #{f["version"]} #{f["update"]}".strip << ", "
+      out << "#{f["match_details"]} "
+      out << "\n"
     end
 
     # print it out! 
@@ -215,10 +198,13 @@ end
 
 def list_checks
   Intrigue::Ident::Http::CheckFactory.checks.map{|x| x.new.generate_checks("[uri]") }.concat(
+  Intrigue::Ident::Dns::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
   Intrigue::Ident::Ftp::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
+  Intrigue::Ident::Mysql::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
+  Intrigue::Ident::Pop3::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
   Intrigue::Ident::Smtp::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
   Intrigue::Ident::Snmp::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
-  Intrigue::Ident::Ssh::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(
+  Intrigue::Ident::Ssh::CheckFactory.checks.map{|x| x.new.generate_checks }).concat(  
   Intrigue::Ident::Telnet::CheckFactory.checks.map{|x| x.new.generate_checks }).flatten
 end
 
@@ -231,7 +217,7 @@ def main
     opts = Slop.parse do |o|
       
       # url input
-      o.string '-u', '--uri', 'a uri to check (supported portocols: ftp, http, https, smtp, snmp, telnet)'
+      o.string '-u', '--uri', 'a uri to check (supported portocols: dns, ftp, http, https, mysql, pop3, smtp, snmp, telnet). ex: http://intrigue.io'
       o.string '-f', '--file', 'a file of urls, one per line'
 
       # export 
@@ -263,26 +249,33 @@ def main
     return
   end
 
+  ###
   ## include external checks
-  if opts[:include]
-    puts "Including checks from path: #{opts[:include]}" if opts[:debug]
-    
+  ###
+  if opts[:include]    
     # follow directory structure from ident
-    Dir.glob("#{opts[:include]}/checks/*/*.rb").each do |p|
-      puts "Requiring include path: #{p}" if opts[:debug]
+    checks = Dir.glob("#{opts[:include]}/checks/*/*.rb")
+    puts "Requiring #{checks.count} files from include path: #{opts[:include]}" if opts[:debug]
+    checks.each do |p|
       require p
     end
-    
   end 
 
   if opts[:'list-checks']
-    list_checks.sort_by{|c| "#{c[:type]}" }.each {|c| 
-    puts " - #{c[:type]} ... #{c[:name]} #{c[:vendor]} #{c[:product]} #{c[:version]}" + 
-        " (Version detection: #{!c[:dynamic_version].nil?})" + 
-        " (Hide: #{c[:hide]})" + 
-        " (Vulns: #{c[:inference]})" + 
-        " #{c[:paths]} ... #{c[:tags]}"}
-    return
+    puts "Fingerprint, Version Detection, Hide By Default, Issues, Vulnerability Inference, Check Paths, Tags"
+    list_checks.sort_by{|c| "#{c[:type]}" }.each do |c| 
+      next unless c[:type] == "fingerprint"
+      out = "" 
+      out << "#{c[:name]} #{c[:vendor]} #{c[:product]} #{c[:version]}".gsub(",","") + ", "
+      out << "#{!c[:dynamic_version].nil?}, " 
+      out << "#{c[:hide]}, "
+      out << "#{(c[:issues].join(" | ") if c[:issues]) || c[:issue]}, "
+      out << "#{c[:inference]}, "
+      out << "#{c[:paths].join(" | ") if c[:paths]}, "
+      out << "#{c[:tags].join(" | ") if c[:tags]}"
+      puts out
+    end
+    return # so we don't hit the next gate
   end
 
   unless opts[:uri] || opts[:file] 

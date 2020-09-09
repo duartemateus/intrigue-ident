@@ -18,8 +18,7 @@ class PulseSecure < Intrigue::Ident::Check::Base
         :version => nil,
         :paths => ["#{url}"],
         :inference => false
-      },
-      {
+      }, {
         :type => "fingerprint",
         :category => "application",
         :tags => ["Networking", "VPN"],
@@ -32,8 +31,7 @@ class PulseSecure < Intrigue::Ident::Check::Base
         :version => nil,
         :paths => ["#{url}"],
         :inference => false
-      },
-      {
+      }, {
         :type => "fingerprint",
         :category => "application",
         :tags => ["Networking", "VPN"],
@@ -50,8 +48,7 @@ class PulseSecure < Intrigue::Ident::Check::Base
         :version => nil,
         :paths => ["#{url}"],
         :inference => false
-      },
-      {
+      }, {
         :type => "fingerprint",
         :category => "application",
         :tags => ["Networking", "VPN"],
@@ -64,8 +61,7 @@ class PulseSecure < Intrigue::Ident::Check::Base
         :version => nil,
         :paths => ["#{url}"],
         :inference => false
-      },
-      {
+      }, {
         :depends => [{:product => "Pulse Connect Secure"}],
         :type => "fingerprint",
         :category => "application",
@@ -79,8 +75,21 @@ class PulseSecure < Intrigue::Ident::Check::Base
         :version => nil,
         :dynamic_version => lambda{|x| _first_body_capture(x,/VALUE=\"Pulse Secure Network Connect ([\d\.]+)/i) }, 
         :paths => ["#{url}/dana-na/nc/nc_gina_ver.txt"],
-        :require_product => "Junos Pulse Secure Access Service",
+        :require_product => "Pulse Connect Secure",
         :inference => true
+      }, {
+        :depends => [{:product => "Pulse Connect Secure"}],
+        :type => "fingerprint",
+        :category => "application",
+        :tags => ["Networking", "VPN"],
+        :vendor =>"PulseSecure",
+        :product =>"Pulse Connect Secure",
+        :match_details => "should show up in customized page",
+        :references => [""],
+        :match_type => :content_body,
+        :match_content => /\<img border=\"0\" src=\"\/dana-na\/auth\/welcome\.cgi\?/,
+        :version => nil,
+        :paths => ["#{url}"]
       }
     ]
   end

@@ -4,6 +4,11 @@ require 'net/http'
 require 'openssl'
 require 'zlib'
 
+# new http request lib
+require 'excon' 
+require_relative 'initialize/excon'
+Excon.defaults[:middlewares] << Excon::Middleware::RedirectFollower
+
 # load in generic utils
 require_relative 'utils'
 require_relative 'version'
@@ -18,6 +23,9 @@ require_relative 'recog_wrapper'
 ##################################
 # Load in http matchers and checks
 ###################################
+require_relative "http/http"
+require_relative "http/http_certificate"
+require_relative 'http/content'
 require_relative 'http/matchers'
 include Intrigue::Ident::Http::Matchers
 
@@ -46,6 +54,20 @@ require_relative 'simple_socket'
 require_relative 'banner_helpers'
 
 ##################################
+# Load in dns matchers and checks
+#################################
+require_relative 'dns/matchers'
+include Intrigue::Ident::Dns::Matchers
+
+require_relative 'dns/check_factory'
+require_relative '../checks/dns/base'
+
+# ftp fingerprints
+check_folder = File.expand_path('../checks/dns', File.dirname(__FILE__)) # get absolute directory
+Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
+
+
+##################################
 # Load in ftp matchers and checks
 #################################
 require_relative 'ftp/matchers'
@@ -57,6 +79,33 @@ require_relative '../checks/ftp/base'
 # ftp fingerprints
 check_folder = File.expand_path('../checks/ftp', File.dirname(__FILE__)) # get absolute directory
 Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
+
+##################################
+# Load in mysql matchers and checks
+#################################
+require_relative 'mysql/matchers'
+include Intrigue::Ident::Mysql::Matchers
+
+require_relative 'mysql/check_factory'
+require_relative '../checks/mysql/base'
+
+# mysql fingerprints
+check_folder = File.expand_path('../checks/mysql', File.dirname(__FILE__)) # get absolute directory
+Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
+
+##################################
+# Load in pop3 matchers and checks
+##################################
+require_relative 'pop3/matchers'
+include Intrigue::Ident::Pop3::Matchers
+
+require_relative 'pop3/check_factory'
+require_relative '../checks/pop3/base'
+
+# pop3 fingerprints
+check_folder = File.expand_path('../checks/pop3', File.dirname(__FILE__)) # get absolute directory
+Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
+
 
 ##################################
 # Load in smtp matchers and checks
@@ -83,7 +132,6 @@ require_relative '../checks/snmp/base'
 # snmp fingerprints
 check_folder = File.expand_path('../checks/snmp', File.dirname(__FILE__)) # get absolute directory
 Dir["#{check_folder}/*.rb"].each { |file| require_relative file }
-
 
 ##################################
 # Load in ssh matchers and checks
@@ -122,7 +170,6 @@ require_relative "vulndb_client"
 Encoding.default_external = Encoding::UTF_8
 Encoding.default_internal = Encoding::UTF_8
 
-
 # set a base directory so we can use in checks 
 $ident_dir = File.expand_path('../', File.dirname(__FILE__))
 
@@ -131,6 +178,10 @@ module Intrigue
 
     private
 
+    def _sanitize_string(string)
+      "#{string}".encode('UTF-8', invalid: :replace, undef: :replace, replace: '?')
+    end
+    
     def _construct_match_response(check, data)
 
       if check[:type] == "fingerprint"
@@ -152,14 +203,18 @@ module Intrigue
         cpe_string = "cpe:2.3:#{calculated_type}:#{vendor_string}:#{product_string}:#{version}:#{update}".downcase
 
         ##
-        ## Support for Dynamic 
+        ## Support for Dynamic Issues
         ##
-        if check[:dynamic_issue]
-          issue = check[:dynamic_issue].call(data)
-        elsif check[:issue]
-          issue = check[:issue]
+        if check[:dynamic_issues]
+          issues = check[:dynamic_issues].call(data)
+        elsif check[:dynamic_issue]  # also handle singular
+          issues = [check[:dynamic_issues].call(data)]
+        elsif check[:issues]
+          issues = check[:issues]
+        elsif check[:issue]         # also handle singular
+          issues = [check[:issue]]
         else
-          issue = nil
+          issues = nil
         end
         
         ##
@@ -176,12 +231,12 @@ module Intrigue
         ##
         ## Support for Dynamic Task
         ##
-        if check[:dynamic_task]
-          task = check[:dynamic_task].call(data)
-        elsif check[:task]
-          task = check[:task]
+        if check[:dynamic_tasks]
+          tasks = check[:dynamic_tasks].call(data)
+        elsif check[:tasks]
+          tasks = check[:tasks]
         else
-          task = nil
+          tasks = nil
         end
 
         to_return = {
@@ -189,15 +244,15 @@ module Intrigue
           "type" => check[:type],
           "vendor" => check[:vendor],
           "product" => check[:product],
-          "version" => calculated_version,
-          "update" => calculated_update,
+          "version" => "#{_sanitize_string(calculated_version)}",
+          "update" => "#{_sanitize_string(calculated_update)}",
           "tags" => check[:tags],
           "match_type" => check[:match_type],
           "match_details" => check[:match_details],
           "hide" => hide,
-          "cpe" => cpe_string,
-          "issue" => issue, 
-          "task" => task, # [{ :task_name => "example", :task_options => {}}]
+          "cpe" => _sanitize_string(cpe_string),
+          "issues" => issues, 
+          "tasks" => tasks, # [{ :task_name => "example", :task_options => {}}]
           "inference" => check[:inference]
         }
 
@@ -252,7 +307,7 @@ module Intrigue
           "hide" => hide,
           "issue" => issue,
           "task" => task,
-          "result" => result
+          "result" => "#{_sanitize_string(result)}"
         }
       end
 
@@ -261,7 +316,6 @@ module Intrigue
 
 end
 end
-
 
 
 # always include 

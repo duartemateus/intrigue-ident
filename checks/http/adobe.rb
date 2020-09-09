@@ -37,7 +37,8 @@ class Adobe < Intrigue::Ident::Check::Base
         :hide => false,
         :paths => ["#{url}/CFIDE/administrator/index.cfm"],
         :require_product => "Coldfusion",
-        :inference => false
+        :inference => false,
+        :issue => "exposed_admin_panel_unauthenticated"
       },
       { # Coldfusion 6, 7  
         :type => "fingerprint",
@@ -59,7 +60,8 @@ class Adobe < Intrigue::Ident::Check::Base
         :hide => false,
         :paths => ["#{url}/CFIDE/administrator/index.cfm"],
         :require_product => "Coldfusion",
-        :inference => true
+        :inference => true,
+        :issue => "exposed_admin_panel_unauthenticated"
       },
       { # Coldfusion 10 ... this needs OR/AND ?
         :type => "fingerprint",
@@ -74,7 +76,8 @@ class Adobe < Intrigue::Ident::Check::Base
         :hide => false,
         :paths => ["#{url}/CFIDE/administrator/index.cfm"],
         :require_product => "Coldfusion",
-        :inference => true
+        :inference => true,
+        :issue => "exposed_admin_panel_unauthenticated"
       },
       { # Coldfusion 11 ... this needs OR/AND ?
         :type => "fingerprint",
@@ -89,7 +92,8 @@ class Adobe < Intrigue::Ident::Check::Base
         :hide => false,
         :paths => ["#{url}/CFIDE/administrator/index.cfm"],
         :require_product => "Coldfusion",
-        :inference => true
+        :inference => true,
+        :issue => "exposed_admin_panel_unauthenticated"
       },
       # 
       { # Generic check 
@@ -108,29 +112,37 @@ class Adobe < Intrigue::Ident::Check::Base
         :hide => false,
         :paths => ["#{url}/CFIDE/administrator/index.cfm"],
         :require_product => "Coldfusion",
-        :inference => true
+        :inference => true,
+        :issue => "exposed_admin_panel_unauthenticated"
       },
-
-=begin
-      # TODO .. implement array for match content (AND) and then grab the rest of these 
-      # 
-      # Check is disabled until we can find something better... ridiculous to make a 
-      # check against every URL just because we havent yet found something on the base page for AEM
       {
         :type => "fingerprint",
         :category => "application",
-        :vendor => "Adobe",
         :tags => ["CMS","Marketing"],
+        :vendor => "Adobe",
         :product => "Experience Manager",
         :version => nil,
         :match_type => :content_body,
-        :match_content => /AEM/,
-        :match_details => "Adobe Experience Manager",
+        :match_content => /src="\/etc\/clientlibs\//,
+        :match_details => "unique path",
         :hide => false,
-        :paths => ["#{url}/libs/granite/core/content/login.html"],
+        :paths => ["#{url}"],
         :inference => false
-      },
-=end    
+      },  
+      {
+        :type => "fingerprint",
+        :category => "application",
+        :tags => ["CMS","Marketing"],
+        :vendor => "Adobe",
+        :product => "Experience Manager",
+        :version => nil,
+        :match_type => :content_body,
+        :match_content => /srcset=\"\/content\/dam\//,
+        :match_details => "unique path",
+        :hide => false,
+        :paths => ["#{url}"],
+        :inference => false
+      },  
       {
         :type => "fingerprint",
         :category => "application",
